@@ -111,7 +111,7 @@ func (r *bot) handleVideoDownloadingResult(ctx context.Context, b *telegramBot.B
 	_, err = b.SendVideo(ctx, &telegramBot.SendVideoParams{
 		ChatID:          chatId,
 		Video:           video,
-		Caption:         fmt.Sprintf("Here's your video..."),
+		Caption:         video.Filename,
 		ReplyParameters: replyParametersTo(repliedTo),
 	})
 	if err != nil {
