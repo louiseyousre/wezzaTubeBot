@@ -40,7 +40,7 @@ func (_ *bot) matchDownloadRequest(update *models.Update) bool {
 		return false
 	}
 
-	if !youtubevideo.IsYouTubeVideoURL(text) {
+	if !youtubevideo.IsYouTubeVideoURL(text) && !youtubevideo.IsYouTubePlaylistURL(text) {
 		return false
 	}
 
@@ -49,48 +49,70 @@ func (_ *bot) matchDownloadRequest(update *models.Update) bool {
 
 func (r *bot) downloadHandler(ctx context.Context, b *telegramBot.Bot, update *models.Update) {
 	var message *models.Message
+	trimmedText := strings.TrimSpace(update.Message.Text)
 
-	videoId, err := youtubevideo.ExtractYouTubeVideoID(strings.TrimSpace(update.Message.Text))
-	if err != nil {
+	if youtubevideo.IsYouTubePlaylistURL(trimmedText) {
+		var err error
 		message, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
 			ChatID:          update.Message.Chat.ID,
-			Text:            err.Error(),
+			Text:            "Trying to download the playlist...",
 			ReplyParameters: replyParametersTo(update.Message),
 		})
 		if err != nil {
 			log.Print(err)
 		}
-		return
-	}
 
-	message, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
-		ChatID:          update.Message.Chat.ID,
-		Text:            "Trying to downloadVideo the video...",
-		ReplyParameters: replyParametersTo(update.Message),
-	})
-	if err != nil {
-		log.Print(err)
-	}
+		ch := r.downloadPlaylist(ctx, trimmedText)
+		for res := range ch {
+			r.handleVideoDownloadingResult(ctx, b, update.Message.Chat.ID, message, res.FileUpload, res.Err)
+		}
+	} else {
+		videoId, err := youtubevideo.ExtractYouTubeVideoID(trimmedText)
+		if err != nil {
+			_, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
+				ChatID:          update.Message.Chat.ID,
+				Text:            err.Error(),
+				ReplyParameters: replyParametersTo(update.Message),
+			})
+			if err != nil {
+				log.Print(err)
+			}
+			return
+		}
 
-	var video *models.InputFileUpload
-	video, err = r.downloadVideo(videoId)
+		message, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
+			ChatID:          update.Message.Chat.ID,
+			Text:            "Trying to download the video...",
+			ReplyParameters: replyParametersTo(update.Message),
+		})
+		if err != nil {
+			log.Print(err)
+		}
+
+		var video *models.InputFileUpload
+		video, err = r.downloadVideo(ctx, videoId)
+		r.handleVideoDownloadingResult(ctx, b, update.Message.Chat.ID, message, video, err)
+	}
+}
+
+func (r *bot) handleVideoDownloadingResult(ctx context.Context, b *telegramBot.Bot, chatId int64, repliedTo *models.Message, video *models.InputFileUpload, err error) {
 	if err != nil {
 		log.Print(err)
 
 		_, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
-			ChatID:          message.ID,
+			ChatID:          repliedTo.ID,
 			Text:            err.Error(),
-			ReplyParameters: replyParametersTo(message),
+			ReplyParameters: replyParametersTo(repliedTo),
 		})
 
 		return
 	}
 
-	message, err = b.SendVideo(ctx, &telegramBot.SendVideoParams{
-		ChatID:          update.Message.Chat.ID,
+	_, err = b.SendVideo(ctx, &telegramBot.SendVideoParams{
+		ChatID:          chatId,
 		Video:           video,
 		Caption:         fmt.Sprintf("Here's your video..."),
-		ReplyParameters: replyParametersTo(message),
+		ReplyParameters: replyParametersTo(repliedTo),
 	})
 	if err != nil {
 		log.Print(err)
@@ -143,6 +165,32 @@ func getExtensionForMimeType(mimeType string) (string, error) {
 	}
 
 	return extensions[0], nil
+}
+
+type downloadResult struct {
+	FileUpload *models.InputFileUpload
+	Err        error
+}
+
+func (r *bot) downloadPlaylist(ctx context.Context, playlistUrl string) <-chan *downloadResult {
+	resultCh := make(chan *downloadResult)
+
+	go func() {
+		defer close(resultCh)
+
+		playlist, err := r.youtubeClient.GetPlaylistContext(ctx, playlistUrl)
+		if err != nil {
+			resultCh <- &downloadResult{Err: fmt.Errorf("error getting playlist: %w", err)}
+			return
+		}
+
+		for _, video := range playlist.Videos {
+			fileUpload, err := r.downloadVideo(ctx, video.ID)
+			resultCh <- &downloadResult{FileUpload: fileUpload, Err: err}
+		}
+	}()
+
+	return resultCh
 }
 
 func (r *bot) downloadVideo(ctx context.Context, videoID string) (*models.InputFileUpload, error) {
