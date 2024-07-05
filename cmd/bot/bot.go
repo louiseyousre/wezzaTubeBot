@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"mime"
+	"regexp"
 	"strings"
 	"wezzaTubeBot/internal/youtubevideo"
 )
@@ -122,6 +123,28 @@ func (_ *bot) defaultHandler(ctx context.Context, b *telegramBot.Bot, update *mo
 	}
 }
 
+var baseMimeRegex = regexp.MustCompile(`^\s*([a-zA-Z0-9\-\.]+/[a-zA-Z0-9\-\.]+)`)
+
+func getExtensionForMimeType(mimeType string) (string, error) {
+	match := baseMimeRegex.FindStringSubmatch(mimeType)
+
+	if len(match) <= 1 {
+		return "", errors.New("invalid mime type")
+	}
+
+	matchedMimeType := match[1]
+
+	extensions, err := mime.ExtensionsByType(matchedMimeType)
+	if err != nil {
+		return "", fmt.Errorf("error getting extensions: %w", err)
+	}
+	if len(extensions) == 0 {
+		return "", fmt.Errorf("no extension found for mime type %q", matchedMimeType)
+	}
+
+	return extensions[0], nil
+}
+
 func (r *bot) download(videoID string) (*models.InputFileUpload, error) {
 	video, err := r.youtubeClient.GetVideo(videoID)
 	if err != nil {
@@ -148,14 +171,13 @@ func (r *bot) download(videoID string) (*models.InputFileUpload, error) {
 		}
 	}(stream)
 
-	var extensions []string
-	extensions, err = mime.ExtensionsByType(format.MimeType)
+	var extension string
+	extension, err = getExtensionForMimeType(format.MimeType)
 	if err != nil {
-		return nil, fmt.Errorf("error getting extensions: %w", err)
-	}
-	if len(extensions) == 0 {
-		return nil, fmt.Errorf("no extension found for mime type %q", format.MimeType)
+		return nil, fmt.Errorf("error getting extension for mime type %q: %w", format.MimeType, err)
 	}
 
-	return &models.InputFileUpload{Filename: fmt.Sprintf("%s%s", video.Title, extensions[0]), Data: stream}, nil
+	filename := fmt.Sprintf("%s%s", video.Title, extension)
+
+	return &models.InputFileUpload{Filename: filename, Data: stream}, nil
 }
