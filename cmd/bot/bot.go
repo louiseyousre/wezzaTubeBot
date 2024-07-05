@@ -164,12 +164,7 @@ func (r *bot) download(videoID string) (*models.InputFileUpload, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to download video: %w", err)
 	}
-	defer func(stream io.ReadCloser) {
-		err = stream.Close()
-		if err != nil {
-			log.Print(fmt.Errorf("error closing stream: %w", err))
-		}
-	}(stream)
+	autoCloseStream := NewAutoCloseReadCloser(stream)
 
 	var extension string
 	extension, err = getExtensionForMimeType(format.MimeType)
@@ -179,5 +174,30 @@ func (r *bot) download(videoID string) (*models.InputFileUpload, error) {
 
 	filename := fmt.Sprintf("%s%s", video.Title, extension)
 
-	return &models.InputFileUpload{Filename: filename, Data: stream}, nil
+	return &models.InputFileUpload{Filename: filename, Data: autoCloseStream}, nil
+}
+
+type AutoCloseReadCloser struct {
+	io.ReadCloser
+	done chan struct{}
+}
+
+func NewAutoCloseReadCloser(rc io.ReadCloser) *AutoCloseReadCloser {
+	return &AutoCloseReadCloser{
+		ReadCloser: rc,
+		done:       make(chan struct{}),
+	}
+}
+
+func (r *AutoCloseReadCloser) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if err == io.EOF {
+		close(r.done)
+	}
+	return n, err
+}
+
+func (r *AutoCloseReadCloser) Close() error {
+	<-r.done // Wait until reading is done
+	return r.ReadCloser.Close()
 }
