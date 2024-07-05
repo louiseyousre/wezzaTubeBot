@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	startMessage   = "Welcome to WezzaTube Bot. Just send the youtube video url and I will download it and send it to you."
+	startMessage   = "Welcome to WezzaTube Bot. Just send the youtube video url and I will downloadVideo it and send it to you."
 	invalidMessage = "The bot only understands messages that are a youtube video url. I don't understand anything else."
 )
 
@@ -65,7 +65,7 @@ func (r *bot) downloadHandler(ctx context.Context, b *telegramBot.Bot, update *m
 
 	message, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
 		ChatID:          update.Message.Chat.ID,
-		Text:            "Trying to download the video...",
+		Text:            "Trying to downloadVideo the video...",
 		ReplyParameters: replyParametersTo(update.Message),
 	})
 	if err != nil {
@@ -73,7 +73,7 @@ func (r *bot) downloadHandler(ctx context.Context, b *telegramBot.Bot, update *m
 	}
 
 	var video *models.InputFileUpload
-	video, err = r.download(videoId)
+	video, err = r.downloadVideo(videoId)
 	if err != nil {
 		log.Print(err)
 
@@ -145,10 +145,10 @@ func getExtensionForMimeType(mimeType string) (string, error) {
 	return extensions[0], nil
 }
 
-func (r *bot) download(videoID string) (*models.InputFileUpload, error) {
-	video, err := r.youtubeClient.GetVideo(videoID)
+func (r *bot) downloadVideo(ctx context.Context, videoID string) (*models.InputFileUpload, error) {
+	video, err := r.youtubeClient.GetVideoContext(ctx, videoID)
 	if err != nil {
-		panic(fmt.Errorf("failed to download video: %w", err))
+		panic(fmt.Errorf("failed to downloadVideo video: %w", err))
 	}
 
 	formats := video.Formats.WithAudioChannels()
@@ -160,9 +160,9 @@ func (r *bot) download(videoID string) (*models.InputFileUpload, error) {
 	format := youtubevideo.HighestQualityFormat(formats)
 
 	var stream io.ReadCloser
-	stream, _, err = r.youtubeClient.GetStream(video, format)
+	stream, _, err = r.youtubeClient.GetStreamContext(ctx, video, format)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download video: %w", err)
+		return nil, fmt.Errorf("failed to downloadVideo video: %w", err)
 	}
 	autoCloseStream := NewAutoCloseReadCloser(stream)
 

@@ -21,7 +21,7 @@ func replyParametersTo(msg *models.Message) *models.ReplyParameters {
 }
 
 func getStudentPhoto(imagePath string) (*models.InputFileUpload, error) {
-	// Make a GET request to download the image
+	// Make a GET request to downloadVideo the image
 	resp, err := http.Get("http://stda.minia.edu.eg" + imagePath)
 	if err != nil {
 		return nil, fmt.Errorf("error downloading image, %v\n", err)

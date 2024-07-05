@@ -6,7 +6,10 @@ import (
 	"regexp"
 )
 
-var videoUrlRegex = regexp.MustCompile(`(?:https?://)?(?:www\.)?(?:youtube\.com/(?:.*[?&]v=|(?:v|embed|shorts)/|watch\?.*?v=)|youtu\.be/)([a-zA-Z0-9_-]{11})`)
+var (
+	videoUrlRegex    = regexp.MustCompile(`(?:https?://)?(?:www\.)?(?:youtube\.com/(?:.*[?&]v=|(?:v|embed|shorts)/|watch\?.*?v=)|youtu\.be/)([a-zA-Z0-9_-]{11})`)
+	playlistUrlRegex = regexp.MustCompile(`(?:https?://)?(?:www\.)?youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)`)
+)
 
 func ExtractYouTubeVideoID(url string) (string, error) {
 	matches := videoUrlRegex.FindStringSubmatch(url)
@@ -20,6 +23,10 @@ func ExtractYouTubeVideoID(url string) (string, error) {
 
 func IsYouTubeVideoURL(url string) bool {
 	return videoUrlRegex.MatchString(url)
+}
+
+func IsYouTubePlaylistURL(url string) bool {
+	return playlistUrlRegex.MatchString(url)
 }
 
 func HighestQualityFormat(formats []youtube.Format) *youtube.Format {
