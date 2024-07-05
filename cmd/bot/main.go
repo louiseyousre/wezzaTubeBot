@@ -4,6 +4,7 @@ import (
 	"context"
 	telegramBot "github.com/go-telegram/bot"
 	"log"
+	"mime"
 	"os"
 	"os/signal"
 )
@@ -38,4 +39,23 @@ func main() {
 
 	tgBot.Start(ctx)
 
+}
+
+func init() {
+	mimeTypes := map[string]string{
+		".mp4":  "video/mp4",
+		".webm": "video/webm",
+		".flv":  "video/x-flv",
+		".3gp":  "video/3gpp",
+		".mov":  "video/quicktime",
+	}
+
+	// Add each MIME type
+	for ext, typ := range mimeTypes {
+		err := mime.AddExtensionType(ext, typ)
+		if err != nil {
+			log.Fatalf("Failed to add MIME type for %s: %v", ext, err)
+		}
+		log.Printf("Added MIME type %s for extension %s", typ, ext)
+	}
 }
