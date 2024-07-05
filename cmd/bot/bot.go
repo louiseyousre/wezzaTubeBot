@@ -66,6 +66,15 @@ func (r *bot) downloadHandler(ctx context.Context, b *telegramBot.Bot, update *m
 		for res := range ch {
 			r.handleVideoDownloadingResult(ctx, b, update.Message.Chat.ID, message, res.FileUpload, res.Err)
 		}
+
+		_, err = b.SendMessage(ctx, &telegramBot.SendMessageParams{
+			ChatID:          update.Message.Chat.ID,
+			Text:            "We finished downloading your playlist.",
+			ReplyParameters: replyParametersTo(update.Message),
+		})
+		if err != nil {
+			log.Print(err)
+		}
 	} else {
 		videoId, err := youtubevideo.ExtractYouTubeVideoID(trimmedText)
 		if err != nil {
